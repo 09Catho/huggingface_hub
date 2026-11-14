@@ -861,6 +861,23 @@ def test_resolve_path_with_refs_revision() -> None:
         assert resolved.unresolve() == "username/my_model@refs/pr/10"
 
 
+def test_info_refresh_bypasses_stale_parent_listing() -> None:
+    fs = HfFileSystem(skip_instance_cache=True)
+    fs.dircache["alice/demo"] = []
+    path_info = RepoFile(path="new.txt", size=3, oid="abc")
+
+    with (
+        patch.object(fs._api, "repo_info"),
+        patch.object(fs._api, "get_paths_info", return_value=[path_info]) as get_paths_info,
+    ):
+        info = fs.info("alice/demo/new.txt", refresh=True)
+
+    assert info["name"] == "alice/demo/new.txt"
+    assert info["size"] == 3
+    assert info["type"] == "file"
+    get_paths_info.assert_called_once_with("alice/demo", "new.txt", expand=False, revision="main", repo_type="model")
+
+
 def mock_repo_info(fs: HfFileSystem):
     def _inner(repo_id: str, *, revision: str, repo_type: str, **kwargs):
         if repo_id not in ["username/my_dataset", "username/my_model"]:
